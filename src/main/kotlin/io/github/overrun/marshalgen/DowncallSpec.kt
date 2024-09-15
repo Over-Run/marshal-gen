@@ -24,48 +24,30 @@ import kotlin.io.path.createDirectories
 annotation class MarshalGen
 
 @MarshalGen
-class DowncallSpec(private val qualifiedName: String, private var javadoc: JavadocSpec?) : ClassRefFactory {
+class DowncallSpec(private val qualifiedName: String, private var javadoc: JavadocSpec?) {
     private val packageName = qualifiedName.substringBeforeLast('.')
     private val simpleName = qualifiedName.substringAfterLast('.')
-    internal val classRefs = ClassRefs()
-    private val superclasses = mutableListOf<ClassRefSupplier>()
+    private val classRefs = ClassRefs()
+    private val superclasses = mutableListOf<ClassRef>()
     private val specs = mutableListOf<Spec>()
 
     init {
         classRefs.importedClasses.add(qualifiedName)
     }
 
-    private fun findPrimitiveRef(name: String, cType: String?, canonicalType: String?): ClassRef? {
-        return when (name) {
-            "void" -> void
-            "boolean" -> PrimitiveClassRef("boolean", cType, canonicalType)
-            "char" -> PrimitiveClassRef("char", cType, canonicalType)
-            "byte" -> PrimitiveClassRef("byte", cType, canonicalType)
-            "short" -> PrimitiveClassRef("short", cType, canonicalType)
-            "int" -> PrimitiveClassRef("int", cType, canonicalType)
-            "long" -> PrimitiveClassRef("long", cType, canonicalType)
-            "float" -> PrimitiveClassRef("float", cType, canonicalType)
-            "double" -> PrimitiveClassRef("double", cType, canonicalType)
-            else -> null
-        }
-    }
-
-    override fun classRef(name: String, carrier: ClassRef?, cType: String?, canonicalType: String?): ClassRef =
-        findPrimitiveRef(name, cType, canonicalType) ?: ObjectClassRef(classRefs, name, cType, canonicalType, carrier)
-
-    fun extends(vararg superclasses: ClassRefSupplier) {
+    fun extends(vararg superclasses: ClassRef) {
         superclasses.forEach { this.superclasses.add(it) }
     }
 
-    operator fun ClassRefSupplier.invoke(declaration: Pair<String, String>, javadoc: JavadocSpec? = null) {
+    operator fun ClassRef.invoke(declaration: Pair<String, String>, javadoc: JavadocSpec? = null) {
         specs.add(FieldSpec(this, declaration.first, declaration.second, javadoc))
     }
 
-    operator fun ClassRefSupplier.invoke(javadoc: JavadocSpec? = null, action: FieldListSpec.() -> Unit) {
+    operator fun ClassRef.invoke(javadoc: JavadocSpec? = null, action: FieldListSpec.() -> Unit) {
         specs.add(FieldListSpec(this, mutableListOf(), javadoc).also(action))
     }
 
-    operator fun ClassRefSupplier.invoke(
+    operator fun ClassRef.invoke(
         methodName: String,
         vararg parameters: ParameterSpec,
         javadoc: JavadocSpec? = null,
@@ -74,29 +56,29 @@ class DowncallSpec(private val qualifiedName: String, private var javadoc: Javad
         specs.add(MethodSpec(this, methodName, parameters.toList(), javadoc).also { action?.invoke(it) })
     }
 
-    operator fun ClassRefSupplier.times(name: String): ParameterSpec =
+    operator fun ClassRef.times(name: String): ParameterSpec =
         ParameterSpec(this, name)
-
-    fun ClassRefSupplier.get(): ClassRef = get(this@DowncallSpec)
 
     operator fun Spec.unaryPlus() {
         this@DowncallSpec.specs.add(this)
     }
 
     private fun downcallLoadMethod(symbolLookup: String, downcallOptions: String?): String =
-        "${Downcall.get()}.load(${handles.get()}.lookup(), $symbolLookup${if (downcallOptions != null) ", $downcallOptions" else ""})"
+        "${Downcall.simpleName(classRefs)}.load(${handles.simpleName(classRefs)}.lookup(), $symbolLookup${if (downcallOptions != null) ", $downcallOptions" else ""})"
 
     fun instanceField(symbolLookup: String, downcallOptions: String? = null) {
-        classRef(qualifiedName, null)("INSTANCE" to downcallLoadMethod(symbolLookup, downcallOptions))
+        classRef(qualifiedName)("INSTANCE" to downcallLoadMethod(symbolLookup, downcallOptions))
     }
 
     fun instanceGetter(symbolLookup: String, downcallOptions: String? = null) {
-        classRef(qualifiedName, null).also {
+        classRef(qualifiedName).also {
             it("getInstance") {
                 static(
                     """
                     final class Holder {
-                        static final $it INSTANCE = ${this@DowncallSpec.downcallLoadMethod(symbolLookup, downcallOptions)};
+                        static final ${it.simpleName(this@DowncallSpec.classRefs)} INSTANCE = ${
+                        this@DowncallSpec.downcallLoadMethod(symbolLookup, downcallOptions)
+                    };
                     }
                     return Holder.INSTANCE;
                 """.trimIndent()
@@ -120,23 +102,15 @@ class DowncallSpec(private val qualifiedName: String, private var javadoc: Javad
                     append("public interface $simpleName")
                     if (superclasses.isNotEmpty()) {
                         append(" extends ")
-                        append(superclasses.joinToString(separator = ", ") { it.get().simpleName })
+                        append(superclasses.joinToString(separator = ", ") { it.simpleName(classRefs) })
                     }
                     appendLine(" {")
-                    specs.forEach { it.appendString(4, this, this@DowncallSpec) }
+                    specs.forEach { it.appendString(4, this, classRefs) }
                     appendLine("}")
                 }
 
                 // imports
-                classRefs.importedClasses
-                    .filterNot {
-                        (it.startsWith("java.lang.") && it.lastIndexOf('.') == 9) ||
-                            it == qualifiedName
-                    }
-                    .sorted()
-                    .forEach {
-                        appendLine("import $it;")
-                    }
+                classRefs.appendString(this, qualifiedName)
                 appendLine()
                 append(s)
             }

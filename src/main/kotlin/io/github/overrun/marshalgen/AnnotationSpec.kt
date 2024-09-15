@@ -16,14 +16,14 @@
 
 package io.github.overrun.marshalgen
 
-typealias AnnotationKV = Pair<String, (ClassRefFactory) -> List<String>>
+typealias AnnotationKV = Pair<String, (ClassRefs) -> List<String>>
 
-class AnnotationSpec(val type: ClassRefSupplier, vararg val values: AnnotationKV) {
-    fun appendString(indent: Int, builder: StringBuilder, factory: ClassRefFactory) {
+class AnnotationSpec(val type: ClassRef, vararg val values: AnnotationKV) {
+    fun appendString(indent: Int, builder: StringBuilder, classRefs: ClassRefs) {
         builder.append(" ".repeat(indent))
-        builder.append("@${type.get(factory)}")
+        builder.append("@${type.simpleName(classRefs)}")
         values.map { (first, second1) ->
-            second1.invoke(factory).let { second ->
+            second1.invoke(classRefs).let { second ->
                 first to
                     if (second.size == 1) second.first()
                     else second.joinToString(", ", prefix = "{", postfix = "}")
@@ -39,10 +39,14 @@ class AnnotationSpec(val type: ClassRefSupplier, vararg val values: AnnotationKV
 }
 
 interface AnnotatedSpec {
-    fun at(classRef: ClassRefSupplier, vararg values: AnnotationKV)
+    fun at(classRef: ClassRef, vararg values: AnnotationKV)
+
+    fun byValue() {
+        at(ByValue)
+    }
 
     fun convert(target: BoolConvert) {
-        at(Convert, "value" to { listOf("${ProcessorType_BoolConvert.get(it)}.${target.name}") })
+        at(Convert, "value" to { listOf("${ProcessorType_BoolConvert.simpleName(it)}.${target.name}") })
     }
 
     fun charset(name: String) {

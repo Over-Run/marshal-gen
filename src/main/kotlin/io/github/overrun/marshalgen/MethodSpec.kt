@@ -16,24 +16,26 @@
 
 package io.github.overrun.marshalgen
 
-class MethodSpec(
-    private val returnType: ClassRefSupplier,
+data class MethodSpec(
+    private val returnType: ClassRef,
     private val name: String,
     private val parameters: List<ParameterSpec>,
-    private val javadocSpec: JavadocSpec?
-) : AnnotatedSpec, Spec {
-    private val annotations = mutableListOf<AnnotationSpec>()
-    private var defaultCode: String? = null
+    private val javadocSpec: JavadocSpec?,
+    private val annotations: MutableList<AnnotationSpec> = mutableListOf(),
+    private var defaultCode: String? = null,
     private var static: Boolean = false
+) : AnnotatedSpec, Spec {
+    var returnCarrierOverloads: Boolean = true
+    var returnShouldAnnotateCType: Boolean = true
 
-    private fun internalAppendString(indent: Int, builder: StringBuilder, factory: ClassRefFactory) {
+    private fun internalAppendString(indent: Int, builder: StringBuilder, classRefs: ClassRefs) {
         builder.apply {
             javadocSpec?.also {
                 appendLine(it.build(indent))
             }
 
-            returnType.get(factory).also {
-                if (it.cType != null) {
+            returnType.also {
+                if (returnShouldAnnotateCType && it.cType != null) {
                     at(CType, "value" to { _ -> listOf(""""${it.cType}"""") })
                 }
                 if (it.canonicalType != null) {
@@ -42,9 +44,9 @@ class MethodSpec(
             }
 
             // annotations
-            annotations.sortedBy { it.type.get(factory).simpleName }
+            annotations.sortedBy { it.type.simpleName(classRefs) }
                 .forEach {
-                    it.appendString(indent, this, factory)
+                    it.appendString(indent, this, classRefs)
                     appendLine()
                 }
 
@@ -57,24 +59,17 @@ class MethodSpec(
                     append("default ")
                 }
             }
-            append("${returnType.get(factory)} ${name}(")
+            append("${returnType.simpleName(classRefs)} ${name}(")
             append(parameters.joinToString(", ") { param ->
                 buildString {
-                    param.type.get(factory).also {
-                        if (it.cType != null) {
-                            param.at(CType, "value" to { _ -> listOf(""""${it.cType}"""") })
-                        }
-                        if (it.canonicalType != null) {
-                            param.at(CanonicalType, "value" to { _ -> listOf(""""${it.canonicalType}"""") })
-                        }
-
-                        param.annotations.sortedBy { annotation -> annotation.type.get(factory).simpleName }
+                    param.type.also {
+                        param.annotations.sortedBy { annotation -> annotation.type.simpleName(classRefs) }
                             .forEach { annotation ->
-                                annotation.appendString(0, this, factory)
+                                annotation.appendString(0, this, classRefs)
                                 append(" ")
                             }
 
-                        append("${it.get(factory)} ${param.name}")
+                        append("${it.simpleName(classRefs)} ${param.name}")
                     }
                 }
             })
@@ -91,44 +86,57 @@ class MethodSpec(
         }
     }
 
-    override fun appendString(indent: Int, builder: StringBuilder, factory: ClassRefFactory) {
-        internalAppendString(indent, builder, factory)
+    override fun appendString(indent: Int, builder: StringBuilder, classRefs: ClassRefs) {
+        parameters.forEach { param ->
+            param.type.also {
+                if (it.cType != null) {
+                    param.at(CType, "value" to { _ -> listOf(""""${it.cType}"""") })
+                }
+                if (it.canonicalType != null) {
+                    param.at(CanonicalType, "value" to { _ -> listOf(""""${it.canonicalType}"""") })
+                }
+            }
+        }
 
-        if (!static && !annotations.any { it.type.get(factory) == Skip }) {
+        internalAppendString(indent, builder, classRefs)
+
+        if (!static && !annotations.any { it.type == Skip }) {
             // generate carrier overload
-            if (returnType.get(factory).let { it.carrier != null && it.carrier != it } ||
-                parameters.any { it.type.get(factory).let { ref -> ref.carrier != null && ref.carrier != ref } }) {
-                MethodSpec(
-                    returnType.get(factory).let { it.carrier ?: it },
-                    if (parameters.isEmpty()) "${name}_" else name,
-                    parameters.map { ParameterSpec(it.type.get(factory).let { ref -> ref.carrier ?: ref }, it.name) },
-                    javadocSpec
-                ).internalAppendString(indent, builder, factory)
+            if ((returnCarrierOverloads && returnType.let { it.carrier != null && it.carrier != it }) ||
+                parameters.any { it.type.let { ref -> ref.carrier != null && ref.carrier != ref } }
+            ) {
+                val pList = parameters.map { it.copy(type = it.type.carrier ?: it.type) }
+                copy(
+                    returnType = if (returnCarrierOverloads) returnType.let { it.carrier ?: it } else returnType,
+                    name = if (parameters == pList) "${name}_" else name,
+                    parameters = pList,
+                    javadocSpec = javadocSpec,
+                    defaultCode = null
+                ).internalAppendString(indent, builder, classRefs)
             }
 
             // generate default parameter overload
             if (parameters.any { it.defaultValue != null }) {
-                MethodSpec(
-                    returnType,
-                    name,
-                    parameters.filter { it.defaultValue == null },
-                    javadocSpec?.withParams {
+                copy(
+                    parameters = parameters.filter { it.defaultValue == null },
+                    javadocSpec = javadocSpec?.withParams {
                         it.filter { p ->
                             parameters.filter { s -> s.defaultValue == null }.any { s -> s.name == p.first }
                         }
-                    }
+                    },
+                    defaultCode = null
                 ).also {
                     it.skip(
                         """
-                        ${if (returnType.get(factory) == void) "" else "return "}this.$name(${parameters.joinToString(", ") { param -> param.defaultValue ?: param.name }});
+                        ${if (returnType == void) "" else "return "}this.$name(${parameters.joinToString(", ") { param -> param.defaultValue ?: param.name }});
                     """.trimIndent()
                     )
-                }.internalAppendString(indent, builder, factory)
+                }.internalAppendString(indent, builder, classRefs)
             }
         }
     }
 
-    override fun at(classRef: ClassRefSupplier, vararg values: AnnotationKV) {
+    override fun at(classRef: ClassRef, vararg values: AnnotationKV) {
         annotations.add(AnnotationSpec(classRef, *values))
     }
 
@@ -138,6 +146,10 @@ class MethodSpec(
 
     fun entrypoint(name: String) {
         at(Entrypoint, "value" to { listOf(""""$name"""") })
+    }
+
+    fun override() {
+        at(override)
     }
 
     fun skip() {
@@ -160,11 +172,14 @@ class MethodSpec(
 }
 
 @MarshalGen
-class ParameterSpec(val type: ClassRefSupplier, val name: String) : AnnotatedSpec {
-    internal val annotations = mutableListOf<AnnotationSpec>()
+data class ParameterSpec(
+    val type: ClassRef,
+    val name: String,
+    internal val annotations: MutableList<AnnotationSpec> = mutableListOf(),
     internal var defaultValue: String? = null
+) : AnnotatedSpec {
 
-    override fun at(classRef: ClassRefSupplier, vararg values: AnnotationKV) {
+    override fun at(classRef: ClassRef, vararg values: AnnotationKV) {
         annotations.add(AnnotationSpec(classRef, *values))
     }
 

@@ -22,6 +22,7 @@ typealias JavadocParam = Pair<String, String>
 data class JavadocSpec(
     private val paragraphs: MutableList<String> = mutableListOf(),
     private val params: MutableList<JavadocParam> = mutableListOf(),
+    private val sees: MutableList<String> = mutableListOf(),
     private var returns: String? = null
 ) {
     operator fun String.unaryPlus() {
@@ -32,6 +33,10 @@ data class JavadocSpec(
         params.add(this to string)
     }
 
+    fun see(string: String) {
+        sees.add(string)
+    }
+
     fun returns(string: String) {
         returns = string
     }
@@ -39,6 +44,7 @@ data class JavadocSpec(
     fun withParams(params: (List<JavadocParam>) -> List<JavadocParam>): JavadocSpec = copy(
         paragraphs = paragraphs.toMutableList(),
         params = params.invoke(this.params).toMutableList(),
+        sees = sees.toMutableList()
     )
 
     fun build(indent: Int): String = buildString {
@@ -55,6 +61,12 @@ data class JavadocSpec(
         returns?.also {
             appendLine()
             append("$indentStr/// @return $returns")
+        }
+        if (sees.isNotEmpty()) {
+            appendLine()
+            append(sees.joinToString("\n") {
+                "@see $it"
+            }.prependIndent("$indentStr/// "))
         }
     }
 }

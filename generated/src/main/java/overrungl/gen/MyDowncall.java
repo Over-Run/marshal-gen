@@ -61,6 +61,8 @@ public interface MyDowncall extends DirectAccess {
     /// @param Parameter1 The first parameter
     /// @param Parameter2 The second parameter
     /// @return The returned value
+    /// @see #SkippedFunction()
+    /// @see #ReturnAddress()
     int WithParameter(int Parameter1, double Parameter2);
 
     String StringFunction(String Parameter1);
@@ -76,17 +78,25 @@ public interface MyDowncall extends DirectAccess {
         System.out.println("default operation");
     }
 
+    default void DefaultFunction3(String Parameter1) {
+        System.out.println("default operation 3");
+    }
+
+    void DefaultFunction3(MemorySegment Parameter1);
+
     @CType("const char*")
     String NativeType(@CType("const char*") String Parameter1);
 
-    MemorySegment NativeType(MemorySegment Parameter1);
+    @CType("const char*")
+    MemorySegment NativeType(@CType("const char*") MemorySegment Parameter1);
 
     MethodHandle ReturnMethodHandle();
 
     @StrCharset("UTF-16")
     String StringCharset(@StrCharset("UTF-16") String Parameter1);
 
-    MemorySegment StringCharset(MemorySegment Parameter1);
+    @StrCharset("UTF-16")
+    MemorySegment StringCharset(@StrCharset("UTF-16") MemorySegment Parameter1);
 
     @Critical(allowHeapAccess = true)
     void CriticalFunction();
@@ -100,14 +110,16 @@ public interface MyDowncall extends DirectAccess {
     /// @param Parameter1 The first parameter
     /// @param Parameter2 The second parameter
     /// @param Parameter3 The third parameter
-    void DefaultParamFunction(int Parameter1, int Parameter2, int Parameter3);
+    /// @param Parameter4 The fourth parameter
+    void DefaultParamFunction(int Parameter1, int Parameter2, int Parameter3, @CType("void*") @CanonicalType("void*") MemorySegment Parameter4);
 
     /// Default parameters
     /// @param Parameter1 The first parameter
     /// @param Parameter3 The third parameter
+    /// @param Parameter4 The fourth parameter
     @Skip
-    default void DefaultParamFunction(int Parameter1, int Parameter3) {
-        this.DefaultParamFunction(Parameter1, 42, Parameter3);
+    default void DefaultParamFunction(int Parameter1, int Parameter3, @CType("void*") @CanonicalType("void*") MemorySegment Parameter4) {
+        this.DefaultParamFunction(Parameter1, 42, Parameter3, Parameter4);
     }
 
     String TestDefaultOverload(int Parameter1, String Parameter2);
@@ -125,7 +137,7 @@ public interface MyDowncall extends DirectAccess {
 
     int[] TestIntArray(int[] Parameter1, @Ref int[] Parameter2);
 
-    MemorySegment TestIntArray(MemorySegment Parameter1, MemorySegment Parameter2);
+    MemorySegment TestIntArray(MemorySegment Parameter1, @Ref MemorySegment Parameter2);
 
     MemorySegment[] TestAddressArray(MemorySegment[] Parameter1);
 
@@ -140,6 +152,6 @@ public interface MyDowncall extends DirectAccess {
 
     void TestAllocator3(Arena Parameter1);
 
-    void CanonicalLayouts(@CanonicalType("bool") boolean p0, @CanonicalType("char") byte p1, @CanonicalType("short") short p2, @CanonicalType("int") int p3, @CanonicalType("float") float p4, @CanonicalType("long") long p5, @CanonicalType("long long") long p6, @CanonicalType("double") double p7, @CanonicalType("size_t") long p8, @CanonicalType("wchar_t") int p9);
+    void CanonicalLayouts(@CType("bool") @CanonicalType("bool") boolean p0, @CType("char") @CanonicalType("char") byte p1, @CType("short") @CanonicalType("short") short p2, @CType("int") @CanonicalType("int") int p3, @CType("float") @CanonicalType("float") float p4, @CType("long") @CanonicalType("long") long p5, @CType("long long") @CanonicalType("long long") long p6, @CType("double") @CanonicalType("double") double p7, @CType("size_t") @CanonicalType("size_t") long p8, @CType("wchar_t") @CanonicalType("wchar_t") int p9);
 
 }

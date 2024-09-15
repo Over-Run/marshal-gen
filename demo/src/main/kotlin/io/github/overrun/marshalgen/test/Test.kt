@@ -19,6 +19,20 @@ package io.github.overrun.marshalgen.test
 import io.github.overrun.marshalgen.*
 
 fun main() {
+    val MyStruct = struct("overrungl.gen.MyStruct", cType = "mystruct") {
+        int("Int")
+        address("Address")
+        void_pointer("VoidPointer", javadoc { +"A `void*` member." })
+        c_int("CInt")
+        string("String")
+        const_char_pointer("ConstCharPointer", javadoc { +"A `const char*` member." })
+        size_t("SizeT")
+    }
+    val MyStruct2 = struct("overrungl.gen.MyStruct2", javadoc = javadoc { +"Javadoc" }) {
+        MyStruct("MyStruct")
+    }
+    StructRegistration.generate("overrungl.gen.MyStructRegistration")
+
     downcall("overrungl.gen.MyDowncall", javadoc = javadoc {
         +"Paragraph 1"
         +"Paragraph 2"
@@ -72,6 +86,8 @@ fun main() {
             "Parameter1" param "The first parameter"
             "Parameter2" param "The second parameter"
             returns("The returned value")
+            see("#SkippedFunction()")
+            see("#ReturnAddress()")
         })
         string("StringFunction", string * "Parameter1")
         void("DefaultFunction1") {
@@ -85,6 +101,13 @@ fun main() {
             default(
                 """
                     System.out.println("default operation");
+                """.trimIndent()
+            )
+        }
+        void("DefaultFunction3", string * "Parameter1") {
+            default(
+                """
+                    System.out.println("default operation 3");
                 """.trimIndent()
             )
         }
@@ -104,11 +127,13 @@ fun main() {
             int * "Parameter1",
             (int * "Parameter2") { default("42") },
             int * "Parameter3",
+            void_pointer * "Parameter4",
             javadoc = javadoc {
                 +"Default parameters"
                 "Parameter1" param "The first parameter"
                 "Parameter2" param "The second parameter"
                 "Parameter3" param "The third parameter"
+                "Parameter4" param "The fourth parameter"
             })
         string("TestDefaultOverload", (int * "Parameter1") { default("42") }, string * "Parameter2")
         string("TestReturnOverload")

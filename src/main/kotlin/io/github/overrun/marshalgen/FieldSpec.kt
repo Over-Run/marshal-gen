@@ -17,34 +17,34 @@
 package io.github.overrun.marshalgen
 
 data class FieldSpec(
-    val type: ClassRefSupplier,
+    val type: ClassRef,
     val name: String,
     val value: String,
     val javadoc: JavadocSpec?
 ) : Spec {
-    override fun appendString(indent: Int, builder: StringBuilder, factory: ClassRefFactory) {
+    override fun appendString(indent: Int, builder: StringBuilder, classRefs: ClassRefs) {
         val indentStr = " ".repeat(indent)
         builder.apply {
             javadoc?.also {
                 appendLine(it.build(indent))
             }
-            appendLine("$indentStr${type.get(factory)} $name = $value;")
+            appendLine("$indentStr${type.simpleName(classRefs)} $name = $value;")
         }
     }
 }
 
 class FieldListSpec(
-    private val type: ClassRefSupplier,
+    private val type: ClassRef,
     private val pairs: MutableList<Pair<String, String>>,
     private val javadoc: JavadocSpec?
 ) : Spec {
-    override fun appendString(indent: Int, builder: StringBuilder, factory: ClassRefFactory) {
+    override fun appendString(indent: Int, builder: StringBuilder, classRefs: ClassRefs) {
         val indentStr = " ".repeat(indent)
         builder.apply {
             javadoc?.also {
                 appendLine(it.build(indent))
             }
-            append("$indentStr${type.get(factory)} ")
+            append("$indentStr${type.simpleName(classRefs)} ")
             appendLine(
                 pairs.joinToString(
                     ",\n$indentStr$indentStr",

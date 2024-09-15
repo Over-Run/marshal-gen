@@ -18,11 +18,11 @@ package io.github.overrun.marshalgen
 
 @MarshalGen
 interface Spec {
-    fun appendString(indent: Int, builder: StringBuilder, factory: ClassRefFactory)
+    fun appendString(indent: Int, builder: StringBuilder, classRefs: ClassRefs)
 }
 
 fun literal(string: String): Spec = object : Spec {
-    override fun appendString(indent: Int, builder: StringBuilder, factory: ClassRefFactory) {
+    override fun appendString(indent: Int, builder: StringBuilder, classRefs: ClassRefs) {
         builder.appendLine(string.prependIndent(" ".repeat(indent)))
     }
 }
