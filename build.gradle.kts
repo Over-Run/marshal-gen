@@ -4,6 +4,7 @@ plugins {
     `java-library`
     signing
     `maven-publish`
+    kotlin("jvm") version "2.0.20"
     //application
 }
 
@@ -33,7 +34,7 @@ val jdkEarlyAccessDoc: String? by rootProject
 val targetJavaVersion = jdkVersion.toInt()
 
 val projDevelopers = arrayOf(
-    Developer("example")
+    Developer("squid233")
 )
 
 data class Organization(
